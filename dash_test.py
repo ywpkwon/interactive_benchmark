@@ -11,7 +11,7 @@ import numpy as np
 import collections
 from flask import Flask
 from util import AP
-
+from scipy.interpolate import interp1d
 # from controls import COUNTIES, WELL_STATUSES, WELL_TYPES, WELL_COLORS
 
 gt_path = 'gt.txt'
@@ -60,7 +60,7 @@ pie_data = [{
         'opacity': 0.7,
         # 'marker': dict(colors=['#fac1b7', '#a9bb95', '#92d8d8']),
         'hoverinfo': "text+value+percent",
-        'textinfo': "label+percent+name",
+        'textinfo': "label+value+name",
         }
 ]
 pie_layout = go.Layout(
@@ -105,9 +105,9 @@ app = dash.Dash('Make Vehicles Great Again!!')
 
 STATIC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 
-@app.server.route('/static/<resource>')
-def serve_static(resource):
-    return flask.send_from_directory(STATIC_PATH, resource)
+# @app.server.route('/static/<resource>')
+# def serve_static(resource):
+    # return flask.send_from_directory(STATIC_PATH, resource)
 
 
 # dcc._css_dist[0]['relative_package_path'].append('mycss.css')
@@ -122,21 +122,34 @@ app.layout = html.Div([
 
     html.Div(
         [
-            html.Img(
-                src="/static/phantom.png",
-                className='two columns',
-                style={
-                    'height': '60',
-                    'width': '160',
-                    'float': 'left',
-                    'position': 'relative',
-                },
+            html.Div(
+                [
+                    html.Img(
+                        src="/static/phantom.png",
+                        className='two columns',
+                        style={
+                            'height': '60',
+                            'width': '160',
+                            'float': 'left',
+                            'position': 'relative',
+                        },
+                    ),
+                ]
             ),
-            html.H1(
-                'PHANTOM AI Performance Lab',
-                className='eleven columns',
-                style={'text-align': 'center'}
-            ),
+            html.Div(
+                [
+                    html.H1(
+                        'PHANTOM AI Performance Lab',
+                        className='eleven columns',
+                        style={'text-align': 'center'}
+                    ),
+                    # html.P(''),
+                    html.H6(
+                        '"If you can\'t measure it, you can\'t manage it."',
+                        className='eleven columns',
+                        style={'text-align': 'center', 'color': 'gray'}
+                    ),
+                ], className='eleven columns')
         ], style={'text-align': 'center', 'margin-top': '50', 'margin-bottom': '50'}, className='row'
     ),
     html.Div(
@@ -199,25 +212,59 @@ app.layout = html.Div([
     ])
 
 
-def prcurve(cache):
+def prcurve(cache, category="all", threshold=0.5):
 
+    category = category.lower()
     name = os.path.splitext(os.path.basename(cache))[0]
     with open(cache, 'rb') as pf:
         data = pickle.load(pf)
 
-    recall = data["recall"]
-    precision = data["precision"]
-    ap = data["ap"]
+    # if threshold not in data: return name, [], []
+    # data = data[threshold]
+    gt = data['gt']
+    pr = data['prediction']
+
+    n_total = 0
+    for fname in gt:
+        for g in gt[fname]:
+            if category != "all" and g['class'].lower() != category: continue
+            if not g['valid']: continue
+            n_total += 1
+
+    assert(n_total > 0)
+
+    true_positives = []
+    for p in pr:
+        if category != "all" and p['class'].lower() != category: continue
+        if p['correct']:    true_positives.append(1)
+        else:               true_positives.append(0)
+
+    true_positives = np.array(true_positives)
+    true_positives = np.cumsum(true_positives)
+    recall = true_positives / n_total
+    precision = true_positives / (np.arange(len(true_positives))+1)
+    ap = AP(recall, precision)
+
+    resolution = 1000
+    if len(recall) > resolution:
+        # reduce the amount of points to plot
+        f = interp1d(recall, precision)
+        x = np.linspace(np.min(recall), np.max(recall), num=1000, endpoint=True)
+        y = f(x)
+        recall = x
+        precision = y
     name = '%0.03f-' % ap + name
+    # return name, recall, precision
     return name, recall, precision
 
 
 @app.callback(Output('precision-recall', 'figure'), [Input('my-dropdown', 'value')])
 def update_graph(selected_dropdown_value):
 
+    print (selected_dropdown_value)
     data = []
     for target_file in target_files:
-        name, recall, precision = prcurve(target_file)
+        name, recall, precision = prcurve(target_file, threshold=selected_dropdown_value)
         data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
     figure = {'data': data, 'layout': main_layout}
     return figure
@@ -235,7 +282,7 @@ def update_graph(selected_dropdown_value):
 
     data = []
     for target_file in target_files:
-        name, recall, precision = prcurve(target_file)
+        name, recall, precision = prcurve(target_file, class_keys[0])
         data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
     figure = {'data': data, 'layout': individual_layouts[0]}
     return figure
@@ -246,7 +293,7 @@ def update_graph(selected_dropdown_value):
 
     data = []
     for target_file in target_files:
-        name, recall, precision = prcurve(target_file)
+        name, recall, precision = prcurve(target_file, class_keys[1])
         data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
     figure = {'data': data, 'layout': individual_layouts[1]}
     return figure
@@ -257,7 +304,7 @@ def update_graph(selected_dropdown_value):
 
     data = []
     for target_file in target_files:
-        name, recall, precision = prcurve(target_file)
+        name, recall, precision = prcurve(target_file,  class_keys[2])
         data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
     figure = {'data': data, 'layout': individual_layouts[2]}
     return figure

@@ -1,10 +1,12 @@
 import os
+import glob
 import argparse
 import pickle
 import numpy as np
 from tqdm import tqdm
 from easydict import EasyDict as edict
 from util import iou, boxxy2boxwh, AP
+
 
 
 def evaluate(gt_path, pred_path, iou_threshold):
@@ -22,8 +24,9 @@ def evaluate(gt_path, pred_path, iou_threshold):
             if name not in gt: gt[name] = []
             gt[name].append({'name': name,
                              'bbox': [x1, y1, x2, y2],
-                             'class': cl,
-                             'detected': False})
+                             'class': cl.lower(),
+                             'detected': False,
+                             'valid': True})
             n_gt_bboxes += 1   # if valid, e.g., difficulty
 
     with open(pred_path, 'r') as f:
@@ -31,6 +34,7 @@ def evaluate(gt_path, pred_path, iou_threshold):
         pr = []
         for line in lines:
             name, prob, x1, y1, x2, y2, cl = line.split()
+            # name, x1, y1, x2, y2, prob,  cl = line.split()
             x1, x2 = np.sort([x1, x2])
             y1, y2 = np.sort([y1, y2])
             x1 = max(0, float(x1)); y1 = max(0, float(y1))
@@ -38,7 +42,7 @@ def evaluate(gt_path, pred_path, iou_threshold):
             pr.append({'name': name,
                        'prob': float(prob),
                        'bbox': [x1, y1, x2, y2],
-                       'class': cl,
+                       'class': cl.lower(),
                        'correct': False})
 
     pr.sort(key=lambda x: -x['prob'])
@@ -72,12 +76,10 @@ def evaluate(gt_path, pred_path, iou_threshold):
     recall = true_positives / n_gt_bboxes
     precision = true_positives / (np.arange(len(true_positives))+1)
 
-    with open(outname + '.pickle', 'wb') as pf:
-        pickle.dump({"prediction": pr,
-                     "n_gt_bboxes": n_gt_bboxes,
-                     "precision": precision,
-                     "recall": recall,
-                     "ap": AP(recall, precision)}, pf)
+    print (outname, AP(recall, precision))
+    result = {"gt": gt, "prediction": pr}
+
+    return outname, result
 
 def main(cfg):
 
@@ -87,14 +89,23 @@ def main(cfg):
 
     # pred_path = '/home/phantom/Documents/benchmark/ssd_wide480a.out'
     # evaluate(gt_path, pred_path)
-    pred_path = "ph_ssd_wide480a.txt"
-    evaluate(gt_path, pred_path, 0.5)
-    pred_path = "ph_ssd_incep1_wide480.txt"
-    evaluate(gt_path, pred_path, 0.5)
-    pred_path = "ph_ssd_incep_wide480_notw.txt"
-    evaluate(gt_path, pred_path, 0.5)
-    pred_path = "ph_ssd_incep_wide480_notw2.txt"
-    evaluate(gt_path, pred_path, 0.5)
+    files2evaluate = glob.glob("*.out")
+    files2evaluate = [f for f in files2evaluate if os.path.basename(f)[0] != '_']
+    print (files2evaluate)
+
+    for file in files2evaluate:
+        outname, result = evaluate(gt_path, file, 0.5)
+        with open(outname + '.pickle', 'wb') as pf:
+            pickle.dump(result, pf)
+
+
+    # pred_path = "ph_ssd_wide480a.txt"
+    # pred_path = "ph_ssd_incep1_wide480.txt"
+    # evaluate(gt_path, pred_path, 0.5)
+    # pred_path = "ph_ssd_incep_wide480_notw.txt"
+    # evaluate(gt_path, pred_path, 0.5)
+    # pred_path = "ph_ssd_incep_wide480_notw2.txt"
+    # evaluate(gt_path, pred_path, 0.5)
 
 
     # if cfg.show:
