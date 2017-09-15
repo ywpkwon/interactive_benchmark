@@ -12,6 +12,16 @@ import numpy as np
 app = dash.Dash('Make Vehicles Great Again!!')
 
 app.layout = html.Div([
+        html.Img(
+            src="phantom.png",
+            className='two columns',
+            style={
+                'height': '60',
+                'width': '160',
+                'float': 'left',
+                'position': 'relative',
+            },
+        ),
         dcc.Dropdown(
             id='my-dropdown',
             options=[
@@ -52,18 +62,19 @@ def update_graph(selected_dropdown_value):
 
     print (selected_dropdown_value)
 
-    cache = '/home/phantom/projects/benchmark/ssd_incep1_wide480.pickle'
+    cache = 'ssd_incep1_wide480.pickle'
     prcurve1 = prcurve(cache)
-    cache = '/home/phantom/projects/benchmark/ssd_wide480a.pickle'
+    cache = 'ssd_wide480a.pickle'
     prcurve2 = prcurve(cache)
     data = [prcurve1, prcurve2]
 
     layout = go.Layout(
-                width=1200,
-                height=1100,
+                title="Precision - Recall",
+                width=800,
+                height=700,
                 xaxis={"autorange": False, "range": [0, 1], 'title': 'recall'},
                 yaxis={"autorange": False, "range": [0, 1], 'title': 'precision'},
-                margin={'l': 40, 'b': 40, 't': 150, 'r': 40},
+                margin={'l': 40, 'b': 40, 't': 70, 'r': 40},
                 # legend={'x': 0, 'y': 1},
                 hovermode='closest'
             )
