@@ -1,61 +1,30 @@
-import sys
-sys.path.append('../')
-
 import os
-import glob
-import json
 import argparse
-import datetime
 import pickle
 import numpy as np
-import tensorflow as tf
-import time
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from easydict import EasyDict as edict
-
-from datasets.reader.utils.util import iou, boxxy2boxwh
-from nets import np_methods
-# from preprocessing import preprocessing_factory
-# from nets.yolo import YOLO, label_formulation_layer
-# from helpers.timer  import Timer
-# from helpers.visualizer import Drawer
-# from helpers.repeatedTimer import CkptProvider
-
-slim = tf.contrib.slim
+from util import iou, boxxy2boxwh, AP
 
 
-def AP(rec, prec):
-    """
-    There are several types of average precision (AP).
-    Here follows the VOC style. As to my knowledge,
-    it may be called interpolated AP, and values can be slightly higher than usual AP.
-    """
-    mrec = np.concatenate([[0.0], rec, [1.0]])
-    mpre = np.concatenate([[0.0], prec, [0.0]])
-    for i in range(len(mpre)-2, -1, -1):
-        mpre[i] = max(mpre[i], mpre[i+1])
-
-    t = np.nonzero(mrec[1:] != mrec[0:-1])[0] + 1
-    ap = np.sum((mrec[t]-mrec[t-1])*mpre[t])
-    return ap
-
-
-def evaluate(gt_path, pred_path):
+def evaluate(gt_path, pred_path, iou_threshold):
 
     outname = os.path.splitext(os.path.basename(pred_path))[0]
 
     with open(gt_path, 'r') as f:
         lines = f.readlines()
-        gt = []
+        gt = {}
+        n_gt_bboxes = 0
         for line in lines:
             name, x1, y1, x2, y2, cl = line.split()
             x1 = max(0, float(x1)); y1 = max(0, float(y1))
             x2 = min(1, float(x2)); y2 = min(1, float(y2))
-            gt.append({'name': name,
-                       'bbox': [x1, y1, x2, y2],
-                       'class': cl,
-                       'detected': False})
+            if name not in gt: gt[name] = []
+            gt[name].append({'name': name,
+                             'bbox': [x1, y1, x2, y2],
+                             'class': cl,
+                             'detected': False})
+            n_gt_bboxes += 1   # if valid, e.g., difficulty
 
     with open(pred_path, 'r') as f:
         lines = f.readlines()
@@ -74,10 +43,8 @@ def evaluate(gt_path, pred_path):
 
     pr.sort(key=lambda x: -x['prob'])
 
-    iou_threshold = 0.5
-
-    gt_fileset = set([g['name'] for g in gt])
-    pr_fileset = set([p['name'] for p in pr])
+    # gt_fileset = set([g['name'] for g in gt])
+    # pr_fileset = set([p['name'] for p in pr])
 
     # common_fileset = [v for v in pr_fileset if v in gt_fileset]
     # if len(common_fileset) != len(pr_fileset):
@@ -85,11 +52,11 @@ def evaluate(gt_path, pred_path):
         # print([v for v in pr_fileset if v not in gt_fileset])
         # quit()
 
-    n_gt_bboxes = 0
-    for g in tqdm(gt):
-        n_gt_bboxes += 1  # if valid, e.g., difficulty
-        for p in pr:
-            if p['correct']: continue
+    for p in tqdm(pr):
+        if p['name'] not in gt: continue
+        cadidates = gt[p['name']]
+        for g in cadidates:
+            if g['detected']: continue
 
             iou_test = iou(boxxy2boxwh(g['bbox']), boxxy2boxwh(p['bbox'])) > iou_threshold
             class_test = True  #g['class'].lower() == p['class'].lower()
@@ -100,25 +67,34 @@ def evaluate(gt_path, pred_path):
                 p['correct'] = True
                 continue
 
+    true_positives = np.array([p['correct'] for p in pr], dtype=np.int32)
+    true_positives = np.cumsum(true_positives)
+    recall = true_positives / n_gt_bboxes
+    precision = true_positives / (np.arange(len(true_positives))+1)
+
     with open(outname + '.pickle', 'wb') as pf:
-        pickle.dump({"prediction": pr, "n_gt_bboxes": n_gt_bboxes}, pf)
+        pickle.dump({"prediction": pr,
+                     "n_gt_bboxes": n_gt_bboxes,
+                     "precision": precision,
+                     "recall": recall,
+                     "ap": AP(recall, precision)}, pf)
 
 def main(cfg):
 
-    gt_path = '/home/phantom/Documents/benchmark/gt.txt'
+    gt_path = 'gt.txt'
     # pred_path = '/home/phantom/Documents/benchmark/ssd_incep1_wide480.out'
     # evaluate(gt_path, pred_path)
 
     # pred_path = '/home/phantom/Documents/benchmark/ssd_wide480a.out'
     # evaluate(gt_path, pred_path)
-    pred_path = "/home/phantom/projects/vision/phantomnet/tools/ph_ssd_wide480a.txt"
-    evaluate(gt_path, pred_path)
-    pred_path = "/home/phantom/projects/vision/phantomnet/tools/ph_ssd_incep1_wide480.txt"
-    evaluate(gt_path, pred_path)
-    pred_path = "/home/phantom/projects/vision/phantomnet/tools/ph_ssd_incep_wide480_notw.txt"
-    evaluate(gt_path, pred_path)
-    pred_path = "/home/phantom/projects/vision/phantomnet/tools/ph_ssd_incep_wide480_notw2.txt"
-    evaluate(gt_path, pred_path)
+    pred_path = "ph_ssd_wide480a.txt"
+    evaluate(gt_path, pred_path, 0.5)
+    pred_path = "ph_ssd_incep1_wide480.txt"
+    evaluate(gt_path, pred_path, 0.5)
+    pred_path = "ph_ssd_incep_wide480_notw.txt"
+    evaluate(gt_path, pred_path, 0.5)
+    pred_path = "ph_ssd_incep_wide480_notw2.txt"
+    evaluate(gt_path, pred_path, 0.5)
 
 
     # if cfg.show:

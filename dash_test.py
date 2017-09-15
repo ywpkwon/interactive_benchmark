@@ -4,20 +4,20 @@ from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 from plotly import tools
-
+import glob
 import plotly.graph_objs as go
 import pickle
 import numpy as np
 import collections
 from flask import Flask
-
+from util import AP
 
 # from controls import COUNTIES, WELL_STATUSES, WELL_TYPES, WELL_COLORS
 
 gt_path = 'gt.txt'
 
-    # 'background': '#111111',
-    # 'text': '#7FDBFF'
+# 'background': '#111111',
+# 'text': '#7FDBFF'
 # colors = {
 #     'font': "#CCCCCC",
 #     'titlefont': "#CCCCCC",
@@ -32,8 +32,8 @@ colors = {
     'paper_bgcolor': "white",
 }
 
-target_files = ['ssd_incep1_wide480.pickle', 'ssd_wide480a.pickle']
-
+# target_files = ['ssd_incep1_wide480.pickle', 'ssd_wide480a.pickle']
+target_files = glob.glob('*.pickle')
 
 with open(gt_path, 'r') as f:
     lines = f.readlines()
@@ -205,15 +205,10 @@ def prcurve(cache):
     with open(cache, 'rb') as pf:
         data = pickle.load(pf)
 
-    pr = data['prediction']
-    n_gt_bboxes = data["n_gt_bboxes"]
-
-    true_positives = np.array([p['correct'] for p in pr], dtype=np.int32)
-    true_positives = np.cumsum(true_positives)
-
-    recall = true_positives / n_gt_bboxes
-    precision = true_positives / (np.arange(len(true_positives))+1)
-
+    recall = data["recall"]
+    precision = data["precision"]
+    ap = data["ap"]
+    name = '%0.03f-' % ap + name
     return name, recall, precision
 
 
@@ -221,12 +216,9 @@ def prcurve(cache):
 def update_graph(selected_dropdown_value):
 
     data = []
-    cache = 'ssd_incep1_wide480.pickle'
-    name, recall, precision = prcurve(cache)
-    data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
-    cache = 'ssd_wide480a.pickle'
-    name, recall, precision = prcurve(cache)
-    data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
+    for target_file in target_files:
+        name, recall, precision = prcurve(target_file)
+        data.append(go.Scatter(x=recall, y=precision, opacity=0.7, mode='lines', name=name))
     figure = {'data': data, 'layout': main_layout}
     return figure
 
