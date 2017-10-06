@@ -92,7 +92,7 @@ def evaluate(gt_path, pred_path, iou_threshold):
 
 def main(cfg, plot=False):
 
-    with open('setting.json') as jf:
+    with open('setting.json', 'r') as jf:
         cfg = json.load(jf)
 
     benchmark_root = cfg['benchmark_root']

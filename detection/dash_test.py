@@ -13,7 +13,7 @@ from flask import Flask
 from util import AP
 from scipy.interpolate import interp1d
 
-gt_path = 'gt.txt'
+gt_path = '/media/phantom/World/phantom_benchmark/detection/gt.txt'
 
 colors = {
     'font': dict(color='black'),
@@ -22,7 +22,7 @@ colors = {
     'paper_bgcolor': "white",
 }
 
-target_files = glob.glob('*.pickle')
+target_files = glob.glob('/media/phantom/World/phantom_benchmark/detection/*.cache')
 
 with open(gt_path, 'r') as f:
     lines = f.readlines()
