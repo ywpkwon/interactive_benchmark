@@ -12,16 +12,9 @@ import collections
 from flask import Flask
 from util import AP
 from scipy.interpolate import interp1d
+from core import prcurve
 
 gt_path = '/media/phantom/World/phantom_benchmark/detection/gt.txt'
-
-colors = {
-    'font': dict(color='black'),
-    'titlefont': dict(color='black', size='14'),
-    'plot_bgcolor': "#e6e6e6",
-    'paper_bgcolor': "white",
-}
-
 target_files = glob.glob('/media/phantom/World/phantom_benchmark/detection/*.cache')
 
 with open(gt_path, 'r') as f:
@@ -39,6 +32,13 @@ with open(gt_path, 'r') as f:
 class_instances = [g['class'] for g in gt]
 class_counter = collections.Counter(class_instances)
 class_keys = list(class_counter)
+
+colors = {
+    'font': dict(color='black'),
+    'titlefont': dict(color='black', size='14'),
+    'plot_bgcolor': "#e6e6e6",
+    'paper_bgcolor': "white",
+}
 
 pie_data = [{
         'type': 'pie',
@@ -88,7 +88,6 @@ individual_layouts = [go.Layout(
         font=colors["font"],
         titlefont=colors["titlefont"],
         hovermode='closest') for class_name in class_keys]
-
 
 app = dash.Dash('Make Vehicles Great Again!!')
 
@@ -199,53 +198,6 @@ app.layout = html.Div([
             ) for class_name in class_keys
         ], className='row')
     ])
-
-
-def prcurve(cache, category="all", threshold=0.5):
-
-    category = category.lower()
-    name = os.path.splitext(os.path.basename(cache))[0]
-    with open(cache, 'rb') as pf:
-        data = pickle.load(pf)
-
-    # if threshold not in data: return name, [], []
-    # data = data[threshold]
-    gt = data['gt']
-    pr = data['prediction']
-
-    n_total = 0
-    for fname in gt:
-        for g in gt[fname]:
-            if category != "all" and g['class'].lower() != category: continue
-            if not g['valid']: continue
-            n_total += 1
-
-    assert(n_total > 0)
-
-    true_positives = []
-    for p in pr:
-        if category != "all" and p['class'].lower() != category: continue
-        if p['correct']:    true_positives.append(1)
-        else:               true_positives.append(0)
-
-    true_positives = np.array(true_positives)
-    true_positives = np.cumsum(true_positives)
-    recall = true_positives / n_total
-    precision = true_positives / (np.arange(len(true_positives))+1)
-    ap = AP(recall, precision)
-
-    resolution = 1000
-    if len(recall) > resolution:
-        # reduce the amount of points to plot
-        f = interp1d(recall, precision)
-        x = np.linspace(np.min(recall), np.max(recall), num=1000, endpoint=True)
-        y = f(x)
-        recall = x
-        precision = y
-    name = '%0.03f-' % ap + name
-    # return name, recall, precision
-    return name, recall, precision
-
 
 @app.callback(Output('precision-recall', 'figure'), [Input('my-dropdown', 'value')])
 def update_graph(selected_dropdown_value):
