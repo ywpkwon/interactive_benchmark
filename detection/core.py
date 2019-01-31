@@ -14,8 +14,11 @@ from util import AP, prcurve
 
 def main(args):
 
-    gt_path = os.path.join(args.root_dir, 'detection', 'gt.txt')
-    target_files = glob.glob(os.path.join(args.root_dir, 'detection', '*.cache'))
+    with open('setting.json') as jf:
+        cfg = json.load(jf)
+
+    gt_path = os.path.join(cfg["root_dir"], 'detection', 'gt.txt')
+    target_files = glob.glob(os.path.join(cfg["root_dir"], 'detection', '*.cache'))
 
     with open(gt_path, 'r') as f:
         lines = f.readlines()
@@ -54,10 +57,8 @@ def main(args):
     plt.show()
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='hello, deep learning world!')
-    parser.add_argument("--root_dir", default='/media/phantom/World/phantom_benchmark', help="benchmark root directory")
     parser.add_argument("--threshold", default=0.5, help="IOU threshold")
     args = parser.parse_args()
 

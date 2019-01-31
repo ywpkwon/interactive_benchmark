@@ -1,4 +1,4 @@
 {
-  "benchmark_root": "/media/phantom/World/phantom_benchmark",
+  "benchmark_root": "/mnt/common/paul/phantom_benchmark",
   "target_dir": "detection"
 }
